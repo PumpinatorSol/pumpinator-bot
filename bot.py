@@ -139,7 +139,7 @@ async def send_transaction_data(token_address, txs, application):
             keys = details["transaction"]["message"].get("accountKeys", [])
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
-            amount_bought = "? "
+            amount_bought = "?"
             for inner in meta.get("innerInstructions", []):
                 for ix in inner.get("instructions", []):
                     parsed = ix.get("parsed", {})
@@ -205,7 +205,9 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-    app.run_polling(drop_pending_updates=True)  # Using polling instead of webhook
+
+    # Start polling the bot
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
