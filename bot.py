@@ -214,7 +214,7 @@ def main():
 
     # Ensure event loop is set
     asyncio.set_event_loop(asyncio.new_event_loop())
-    
+
     # Set the webhook for the bot and start listening for incoming updates
     asyncio.run(setup_webhook(app))
     print(f"🚀 Webhook set. Bot is now ready to receive updates.")
