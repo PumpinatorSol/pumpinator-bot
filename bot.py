@@ -12,7 +12,7 @@ from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
-# Load env
+# Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -119,8 +119,9 @@ def fetch_transaction_details(sig):
         }
         res = requests.post(SOLANA_RPC_URL, json=payload)
         return res.json().get("result", {})
-    except:
-        return None
+    except Exception as e:
+        print(f"[Transaction Details Fetch ERROR]: {e}")
+        return {}
 
 # === Format & Send Message ===
 async def send_transaction_data(token_address, txs, application):
@@ -148,7 +149,8 @@ async def send_transaction_data(token_address, txs, application):
                             raw = int(info.get("amount", 0))
                             amount_bought = f"{raw / (10**decimals):,.4f}"
 
-        except:
+        except Exception as e:
+            print(f"[Error Processing Transaction]: {e}")
             sol_spent = 0
             buyer = "unknown"
             amount_bought = "?"
@@ -158,17 +160,17 @@ async def send_transaction_data(token_address, txs, application):
 
 🔹 <b>{amount_bought}</b> {token_symbol} Purchased  
 💰 <b>{sol_spent:.4f} SOL</b> Spent  
-👤 Buyer: <a href=\"https://solscan.io/account/{buyer}\">{buyer[:8]}...{buyer[-4:]}</a>
+👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
 """.strip()
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")]
+        keyboard = InlineKeyboardMarkup([ 
+            [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")] 
         ])
-        await application.bot.send_message(
-            chat_id=CHAT_ID,
-            text=message,
-            parse_mode="HTML",
-            reply_markup=keyboard
+        await application.bot.send_message( 
+            chat_id=CHAT_ID, 
+            text=message, 
+            parse_mode="HTML", 
+            reply_markup=keyboard 
         )
 
 # === Monitor Loop ===
@@ -203,7 +205,9 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-    app.run_polling()
+
+    # Start polling the bot
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
