@@ -215,9 +215,9 @@ def main():
     # Use Webhook or Polling based on environment
     if os.getenv("WEBHOOK_URL"):
         app.post_init = setup_webhook
-        app.run_webhook(drop_pending_updates=True)
+        app.run_webhook(drop_pending_updates=True)  # Use Webhook if configured
     else:
-        app.run_polling(drop_pending_updates=True)
+        app.run_polling(drop_pending_updates=True)  # Use Polling if no Webhook is configured
 
 if __name__ == "__main__":
     main()
