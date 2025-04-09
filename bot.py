@@ -119,8 +119,9 @@ def fetch_transaction_details(sig):
         }
         res = requests.post(SOLANA_RPC_URL, json=payload)
         return res.json().get("result", {})
-    except:
-        return None
+    except Exception as e:
+        print(f"[Transaction Details Fetch ERROR]: {e}")
+        return {}
 
 # === Format & Send Message ===
 async def send_transaction_data(token_address, txs, application):
@@ -148,7 +149,8 @@ async def send_transaction_data(token_address, txs, application):
                             raw = int(info.get("amount", 0))
                             amount_bought = f"{raw / (10**decimals):,.4f}"
 
-        except:
+        except Exception as e:
+            print(f"[Error Processing Transaction]: {e}")
             sol_spent = 0
             buyer = "unknown"
             amount_bought = "?"
