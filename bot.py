@@ -57,29 +57,32 @@ def save_tokens(tokens):
     with open(TOKENS_FILE, 'w') as f:
         f.write('\n'.join(tokens))
 
-# === Format & Send Message to Telegram ===
-async def send_transaction_data(token_address, amount, buyer, tx_hash, application):
-    token_name, token_symbol, decimals = fetch_token_metadata(token_address)
+# === Telegram Commands ===
+async def add_token(update: Update, context: CallbackContext):
+    if len(context.args) == 1:
+        token = context.args[0]
+        tokens = load_tokens()
+        if token not in tokens:
+            tokens.append(token)
+            save_tokens(tokens)
+            await update.message.reply_text(f"✅ Token added: {token}")
+        else:
+            await update.message.reply_text("⚠️ Already tracking that token.")
+    else:
+        await update.message.reply_text("Usage: /add <token_mint>")
 
-    # Formatting the message
-    message = f"""
-<b>💸 ${token_symbol} Buy Detected!</b>
-
-🔹 <b>{amount}</b> {token_symbol} Purchased  
-👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
-💰 TX Hash: <a href="https://solscan.io/tx/{tx_hash}">🔗 View TX</a>
-""".strip()
-
-    # Send message to the Telegram channel
-    keyboard = InlineKeyboardMarkup([ 
-        [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")]
-    ])
-    await application.bot.send_message(
-        chat_id=CHAT_ID,
-        text=message,
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
+async def remove_token(update: Update, context: CallbackContext):
+    if len(context.args) == 1:
+        token = context.args[0]
+        tokens = load_tokens()
+        if token in tokens:
+            tokens.remove(token)
+            save_tokens(tokens)
+            await update.message.reply_text(f"❌ Token removed: {token}")
+        else:
+            await update.message.reply_text("Token not found.")
+    else:
+        await update.message.reply_text("Usage: /remove <token_mint>")
 
 # === WebSocket Listener for Solana ===
 async def listen_solana_transactions():
@@ -115,6 +118,30 @@ async def listen_solana_transactions():
                 await send_transaction_data("mint_address_here", amount, buyer, tx_hash, application)
             except Exception as e:
                 print(f"Error processing transaction: {e}")
+
+# === Format & Send Message to Telegram ===
+async def send_transaction_data(token_address, amount, buyer, tx_hash, application):
+    token_name, token_symbol, decimals = fetch_token_metadata(token_address)
+
+    # Formatting the message
+    message = f"""
+<b>💸 ${token_symbol} Buy Detected!</b>
+
+🔹 <b>{amount}</b> {token_symbol} Purchased  
+👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
+💰 TX Hash: <a href="https://solscan.io/tx/{tx_hash}">🔗 View TX</a>
+""".strip()
+
+    # Send message to the Telegram channel
+    keyboard = InlineKeyboardMarkup([ 
+        [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")]
+    ])
+    await application.bot.send_message(
+        chat_id=CHAT_ID,
+        text=message,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
 
 # === Launch Bot ===
 def main():
