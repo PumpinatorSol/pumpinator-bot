@@ -1,5 +1,4 @@
 import os
-import json
 import base64
 import asyncio
 import requests
@@ -8,13 +7,12 @@ from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
-from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
 # Load environment variables
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7845913453:AAGdE4k2nQy-jVqwpQe6gVydT819Eth-aPA")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
@@ -29,7 +27,7 @@ def get_metadata_pda(mint):
     seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
     return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
 
-# === Fetch Metadata with Birdeye fallback ===
+# === Fetch Metadata with Fallback ===
 def fetch_token_metadata(token_address):
     try:
         metadata_pda = get_metadata_pda(token_address)
@@ -188,13 +186,16 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Launch Bot ===
+# === Launch Bot (Polling Only) ===
 def main():
     print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Add handlers
     app.add_handler(CommandHandler("add", add_token))
     app.add_handler(CommandHandler("remove", remove_token))
 
+    # Start polling
     async def post_init(app):
         global monitor_task
         monitor_task = asyncio.create_task(monitor_transactions(app))
@@ -205,9 +206,7 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-
-    # Start polling the bot
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=True)  # Start polling for updates
 
 if __name__ == "__main__":
     main()
