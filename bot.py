@@ -140,7 +140,6 @@ async def send_transaction_data(token_address, txs, application):
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
             amount_bought = "?"
-
             for inner in meta.get("innerInstructions", []):
                 for ix in inner.get("instructions", []):
                     parsed = ix.get("parsed", {})
