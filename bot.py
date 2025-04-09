@@ -188,12 +188,6 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Webhook Setup ===
-async def setup_webhook(application):
-    webhook_url = os.getenv("WEBHOOK_URL")  # Set this environment variable for the bot's webhook
-    if webhook_url:
-        await application.bot.set_webhook(webhook_url + "/webhook")
-
 # === Launch Bot ===
 def main():
     print("🟢 Initializing bot...")
