@@ -151,7 +151,8 @@ def main():
     app.add_handler(CommandHandler("remove", remove_token))
 
     # Start the WebSocket listener for Solana transactions
-    asyncio.create_task(listen_solana_transactions())
+    loop = asyncio.get_event_loop()
+    loop.create_task(listen_solana_transactions())
 
     # Start the polling of Telegram bot (since we are no longer using webhooks)
     app.run_polling(drop_pending_updates=True)
