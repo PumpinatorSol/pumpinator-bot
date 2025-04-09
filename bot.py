@@ -161,14 +161,14 @@ async def send_transaction_data(token_address, txs, application):
 👤 Buyer: <a href=\"https://solscan.io/account/{buyer}\">{buyer[:8]}...{buyer[-4:]}</a>
 """.strip()
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")]
+        keyboard = InlineKeyboardMarkup([ 
+            [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")] 
         ])
-        await application.bot.send_message(
-            chat_id=CHAT_ID,
-            text=message,
-            parse_mode="HTML",
-            reply_markup=keyboard
+        await application.bot.send_message( 
+            chat_id=CHAT_ID, 
+            text=message, 
+            parse_mode="HTML", 
+            reply_markup=keyboard 
         )
 
 # === Monitor Loop ===
@@ -187,6 +187,11 @@ async def monitor_transactions(application):
         print("🛑 Monitor task cancelled.")
 
 # === Launch Bot ===
+async def setup_webhook(application):
+    # Here, you set the webhook URL, make sure your Render app URL is used
+    webhook_url = os.getenv("WEBHOOK_URL")  # Set this environment variable for the bot's webhook
+    await application.bot.set_webhook(webhook_url + "/webhook")
+
 def main():
     print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
@@ -196,6 +201,7 @@ def main():
     async def post_init(app):
         global monitor_task
         monitor_task = asyncio.create_task(monitor_transactions(app))
+        await setup_webhook(app)
 
     async def shutdown(app):
         if monitor_task:
@@ -203,7 +209,7 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)  # Drop pending updates to avoid issues with webhooks
 
 if __name__ == "__main__":
     main()
