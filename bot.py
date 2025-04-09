@@ -12,9 +12,8 @@ from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
-# Load environment variables
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Replace with your bot token directly
+BOT_TOKEN = "7845913453:AAGdE4k2nQy-jVqwpQe6gVydT819Eth-aPA"
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
@@ -188,12 +187,6 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Webhook Setup ===
-async def setup_webhook(application):
-    webhook_url = os.getenv("WEBHOOK_URL")  # Set this environment variable for the bot's webhook
-    if webhook_url:
-        await application.bot.set_webhook(webhook_url + "/webhook")
-
 # === Launch Bot ===
 def main():
     print("🟢 Initializing bot...")
@@ -211,13 +204,7 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-
-    # Check if we have a webhook URL set in environment variables
-    if os.getenv("WEBHOOK_URL"):
-        app.post_init = setup_webhook
-        app.run_webhook(drop_pending_updates=True)  # Use Webhook if configured
-    else:
-        app.run_polling(drop_pending_updates=True)  # Use Polling if no Webhook is configured
+    app.run_polling(drop_pending_updates=True)  # Drop pending updates to avoid issues with webhooks
 
 if __name__ == "__main__":
     main()
