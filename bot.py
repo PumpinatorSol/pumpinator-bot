@@ -208,4 +208,4 @@ def main():
     app.run_polling(drop_pending_updates=True)  # Using polling instead of webhook
 
 if __name__ == "__main__":
-    main
+    main()
