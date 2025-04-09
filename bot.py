@@ -12,9 +12,8 @@ from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
-# Load environment variables
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Replace with your bot token directly
+BOT_TOKEN = "7845913453:AAGdE4k2nQy-jVqwpQe6gVydT819Eth-aPA"
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
@@ -205,9 +204,7 @@ def main():
 
     app.post_init = post_init
     app.shutdown = shutdown
-
-    # Start polling the bot
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=True)  # Drop pending updates to avoid issues with webhooks
 
 if __name__ == "__main__":
     main()
