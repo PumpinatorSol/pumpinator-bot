@@ -6,28 +6,29 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
-from solders.pubkey import Pubkey
+from solana.publickey import PublicKey
 from solana.rpc.api import Client
-from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
-# Load environment variables
+# Load env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
 
-METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+METADATA_PROGRAM_ID = PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
-monitor_task = None
+monitor_task = None  # To hold reference for cleanup
+
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
-    seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
-    return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
+    seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(PublicKey(mint))]
+    return PublicKey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
+
 
 # === Fetch Metadata with Birdeye fallback ===
 def fetch_token_metadata(token_address):
@@ -44,7 +45,7 @@ def fetch_token_metadata(token_address):
 
         name = decoded[1 + 32 + 32:1 + 32 + 32 + 32].decode('utf-8').rstrip('\x00')
         symbol = decoded[1 + 32 + 32 + 32:1 + 32 + 32 + 32 + 10].decode('utf-8').rstrip('\x00')
-        decimals = int(solana_client.get_token_supply(Pubkey.from_string(token_address))["result"]["value"]["decimals"])
+        decimals = int(solana_client.get_token_supply(PublicKey(token_address))["result"]["value"]["decimals"])
         return name, symbol, decimals
 
     except Exception as e:
@@ -59,13 +60,16 @@ def fetch_token_metadata(token_address):
 
     return "UnknownToken", "UNKNOWN", 0
 
+
 # === Token Save/Load ===
 def load_tokens():
     return open(TOKENS_FILE).read().splitlines() if os.path.exists(TOKENS_FILE) else []
 
+
 def save_tokens(tokens):
     with open(TOKENS_FILE, 'w') as f:
         f.write('\n'.join(tokens))
+
 
 # === Telegram Commands ===
 async def add_token(update: Update, context: CallbackContext):
@@ -81,6 +85,7 @@ async def add_token(update: Update, context: CallbackContext):
     else:
         await update.message.reply_text("Usage: /add <token_mint>")
 
+
 async def remove_token(update: Update, context: CallbackContext):
     if len(context.args) == 1:
         token = context.args[0]
@@ -93,6 +98,7 @@ async def remove_token(update: Update, context: CallbackContext):
             await update.message.reply_text("Token not found.")
     else:
         await update.message.reply_text("Usage: /remove <token_mint>")
+
 
 # === Solana Fetchers ===
 def fetch_recent_transactions(token_address):
@@ -109,6 +115,7 @@ def fetch_recent_transactions(token_address):
         print(f"[TX Fetch ERROR]: {e}")
         return []
 
+
 def fetch_transaction_details(sig):
     try:
         payload = {
@@ -121,6 +128,7 @@ def fetch_transaction_details(sig):
         return res.json().get("result", {})
     except:
         return None
+
 
 # === Format & Send Message ===
 async def send_transaction_data(token_address, txs, application):
@@ -158,7 +166,7 @@ async def send_transaction_data(token_address, txs, application):
 
 🔹 <b>{amount_bought}</b> {token_symbol} Purchased  
 💰 <b>{sol_spent:.4f} SOL</b> Spent  
-👤 Buyer: <a href=\"https://solscan.io/account/{buyer}\">{buyer[:8]}...{buyer[-4:]}</a>
+👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
 """.strip()
 
         keyboard = InlineKeyboardMarkup([
@@ -170,6 +178,7 @@ async def send_transaction_data(token_address, txs, application):
             parse_mode="HTML",
             reply_markup=keyboard
         )
+
 
 # === Monitor Loop ===
 async def monitor_transactions(application):
@@ -185,6 +194,7 @@ async def monitor_transactions(application):
             await asyncio.sleep(60)
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
+
 
 # === Launch Bot ===
 def main():
@@ -204,6 +214,7 @@ def main():
     app.post_init = post_init
     app.shutdown = shutdown
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
