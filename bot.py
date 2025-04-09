@@ -12,7 +12,7 @@ from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
-# Load env
+# Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
