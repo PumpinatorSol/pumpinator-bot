@@ -213,7 +213,7 @@ def main():
     app.shutdown = shutdown
 
     # Set the webhook for the bot and start listening for incoming updates
-    setup_webhook(app)
+    asyncio.run(setup_webhook(app))
     print(f"🚀 Webhook set. Bot is now ready to receive updates.")
     app.run_webhook(drop_pending_updates=True)
 
