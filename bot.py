@@ -186,30 +186,14 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Launch Bot ===
+# === Webhook Setup ===
 async def setup_webhook(application):
-    # Here, you set the webhook URL, make sure your Render app URL is used
     webhook_url = os.getenv("WEBHOOK_URL")  # Set this environment variable for the bot's webhook
-    await application.bot.set_webhook(webhook_url + "/webhook")
+    if webhook_url:
+        await application.bot.set_webhook(webhook_url + "/webhook")
 
+# === Launch Bot ===
 def main():
     print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("add", add_token))
-    app.add_handler(CommandHandler("remove", remove_token))
-
-    async def post_init(app):
-        global monitor_task
-        monitor_task = asyncio.create_task(monitor_transactions(app))
-        await setup_webhook(app)
-
-    async def shutdown(app):
-        if monitor_task:
-            monitor_task.cancel()
-
-    app.post_init = post_init
-    app.shutdown = shutdown
-    app.run_polling(drop_pending_updates=True)  # Drop pending updates to avoid issues with webhooks
-
-if __name__ == "__main__":
-    main()
+    app.add_handler(Command
