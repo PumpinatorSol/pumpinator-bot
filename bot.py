@@ -212,7 +212,7 @@ def main():
     app.post_init = post_init
     app.shutdown = shutdown
 
-    # Use Webhook or Polling based on environment
+    # Check if we have a webhook URL set in environment variables
     if os.getenv("WEBHOOK_URL"):
         app.post_init = setup_webhook
         app.run_webhook(drop_pending_updates=True)  # Use Webhook if configured
