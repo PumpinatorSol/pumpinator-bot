@@ -158,7 +158,7 @@ async def send_transaction_data(token_address, txs, application):
 
 🔹 <b>{amount_bought}</b> {token_symbol} Purchased  
 💰 <b>{sol_spent:.4f} SOL</b> Spent  
-👤 Buyer: <a href=\"https://solscan.io/account/{buyer}\">{buyer[:8]}...{buyer[-4:]}</a>
+👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
 """.strip()
 
         keyboard = InlineKeyboardMarkup([ 
@@ -196,4 +196,20 @@ async def setup_webhook(application):
 def main():
     print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(Command
+    app.add_handler(CommandHandler("add", add_token))
+    app.add_handler(CommandHandler("remove", remove_token))
+
+    async def post_init(app):
+        global monitor_task
+        monitor_task = asyncio.create_task(monitor_transactions(app))
+
+    async def shutdown(app):
+        if monitor_task:
+            monitor_task.cancel()
+
+    app.post_init = post_init
+    app.shutdown = shutdown
+    app.run_polling(drop_pending_updates=True)  # Drop pending updates to avoid issues with webhooks
+
+if __name__ == "__main__":
+    main()
