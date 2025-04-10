@@ -53,7 +53,10 @@ def fetch_token_metadata(token_address):
         try:
             res = requests.get(f"https://public-api.birdeye.so/public/token/{token_address}", headers={"X-API-KEY": "public"})
             data = res.json().get("data", {})
-            return data.get("name", "UnknownToken"), data.get("symbol", "UNKNOWN"), int(data.get("decimals", 0))
+            name = data.get("name", "UnknownToken")
+            symbol = data.get("symbol", "UNKNOWN")
+            decimals = int(data.get("decimals", 0))
+            return name, symbol, decimals
         except Exception as fallback_error:
             print(f"[Birdeye ERROR]: {fallback_error}")
 
