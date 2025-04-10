@@ -10,8 +10,6 @@ from solders.pubkey import Pubkey
 from solana.rpc.api import Client
 from solders.rpc.config import RpcAccountInfoConfig
 
-print("🚀 Starting bot...")
-
 # Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -23,6 +21,14 @@ METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt5
 solana_client = Client(SOLANA_RPC_URL)
 
 monitor_task = None
+
+# Delete existing webhook (if any)
+def delete_webhook():
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook"
+    response = requests.post(url)
+    print(response.json())
+
+delete_webhook()  # Make sure to delete any existing webhook
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
@@ -53,10 +59,7 @@ def fetch_token_metadata(token_address):
         try:
             res = requests.get(f"https://public-api.birdeye.so/public/token/{token_address}", headers={"X-API-KEY": "public"})
             data = res.json().get("data", {})
-            name = data.get("name", "UnknownToken")
-            symbol = data.get("symbol", "UNKNOWN")
-            decimals = int(data.get("decimals", 0))
-            return name, symbol, decimals
+            return data.get("name", "UnknownToken"), data.get("symbol", "UNKNOWN"), int(data.get("decimals", 0))
         except Exception as fallback_error:
             print(f"[Birdeye ERROR]: {fallback_error}")
 
@@ -138,7 +141,7 @@ async def send_transaction_data(token_address, txs, application):
 
         try:
             meta = details.get("meta", {})
-            sol_spent = max((meta.get("preBalances", [0])[0] - meta.get("postBalances", [0])[0]) / 1e9, 0)  # Ensure no negative values
+            sol_spent = (meta.get("preBalances", [0])[0] - meta.get("postBalances", [0])[0]) / 1e9
             keys = details["transaction"]["message"].get("accountKeys", [])
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
