@@ -1,6 +1,5 @@
 import os
 import base64
-import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
@@ -10,6 +9,8 @@ from solana.rpc.api import Client
 
 # Load environment variables
 load_dotenv()
+
+# Bot Token from your .env file
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
@@ -17,6 +18,17 @@ TOKENS_FILE = 'added_tokens.txt'
 
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
+
+monitor_task = None
+
+# Function to clear any existing webhooks
+def clear_webhook():
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook"
+    response = requests.post(url)
+    if response.status_code == 200:
+        print("Webhook cleared successfully.")
+    else:
+        print("Failed to clear webhook.")
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
@@ -184,8 +196,13 @@ async def monitor_transactions(application):
 
 # === Launch Bot ===
 def main():
-    print("🟢 Initializing bot...")
+    # Clear any existing webhooks
+    clear_webhook()
+
+    # Initialize the bot application
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Add command handlers
     app.add_handler(CommandHandler("add", add_token))
     app.add_handler(CommandHandler("remove", remove_token))
 
