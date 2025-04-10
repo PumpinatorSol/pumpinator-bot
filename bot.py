@@ -4,12 +4,11 @@ import base64
 import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
 from solders.rpc.config import RpcAccountInfoConfig
-from flask import Flask, request
 
 print("🚀 Starting bot...")
 
@@ -140,7 +139,7 @@ async def send_transaction_data(token_address, txs, application):
             keys = details["transaction"]["message"].get("accountKeys", [])
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
-            amount_bought = "? "
+            amount_bought = "?"
             for inner in meta.get("innerInstructions", []):
                 for ix in inner.get("instructions", []):
                     parsed = ix.get("parsed", {})
@@ -189,23 +188,12 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Flask Webhook Setup ===
-app = Flask(__name__)
-
-@app.route('/' + BOT_TOKEN, methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('UTF-8')
-    update = Update.de_json(json.loads(json_str), application.bot)
-    application.process_update(update)
-    return 'OK', 200
-
 # === Launch Bot ===
 def main():
     print("🟢 Initializing bot...")
-    global application
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("add", add_token))
-    application.add_handler(CommandHandler("remove", remove_token))
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("add", add_token))
+    app.add_handler(CommandHandler("remove", remove_token))
 
     async def post_init(app):
         global monitor_task
@@ -215,11 +203,11 @@ def main():
         if monitor_task:
             monitor_task.cancel()
 
-    application.post_init = post_init
-    application.shutdown = shutdown
+    app.post_init = post_init
+    app.shutdown = shutdown
 
-    # Start the webhook
-    app.run(host="0.0.0.0", port=80)
+    # Start polling the bot
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
