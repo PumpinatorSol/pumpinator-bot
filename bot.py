@@ -1,11 +1,16 @@
 import os
+import json
 import base64
+import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
-from solana.rpc.api import Client
 from solders.pubkey import Pubkey
+from solana.rpc.api import Client
+from solders.rpc.config import RpcAccountInfoConfig
+
+print("🚀 Starting bot...")
 
 # Load environment variables
 load_dotenv()
@@ -17,12 +22,14 @@ TOKENS_FILE = 'added_tokens.txt'
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
+monitor_task = None
+
 # === PDA Calculation ===
 def get_metadata_pda(mint):
     seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
     return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
 
-# === Fetch Token Metadata ===
+# === Fetch Metadata with Birdeye fallback ===
 def fetch_token_metadata(token_address):
     try:
         metadata_pda = get_metadata_pda(token_address)
@@ -41,8 +48,16 @@ def fetch_token_metadata(token_address):
         return name, symbol, decimals
 
     except Exception as e:
-        print(f"[ERROR]: {e}")
-        return "UnknownToken", "UNKNOWN", 0
+        print(f"[Metaplex ERROR]: {e}")
+        print(f"[Fallback] Using Birdeye for {token_address}")
+        try:
+            res = requests.get(f"https://public-api.birdeye.so/public/token/{token_address}", headers={"X-API-KEY": "public"})
+            data = res.json().get("data", {})
+            return data.get("name", "UnknownToken"), data.get("symbol", "UNKNOWN"), int(data.get("decimals", 0))
+        except Exception as fallback_error:
+            print(f"[Birdeye ERROR]: {fallback_error}")
+
+    return "UnknownToken", "UNKNOWN", 0
 
 # === Token Save/Load ===
 def load_tokens():
