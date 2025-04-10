@@ -1,12 +1,11 @@
 import os
-import requests
 import base64
-import asyncio
-from telegram import Update
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
-from solders.pubkey import Pubkey
 from solana.rpc.api import Client
+from solders.pubkey import Pubkey
 
 # Load environment variables
 load_dotenv()
@@ -15,18 +14,15 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
 
-# Initialize Solana client
-solana_client = Client(SOLANA_RPC_URL)
-
-# Metadata Program ID
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+solana_client = Client(SOLANA_RPC_URL)
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
     seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
     return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
 
-# === Fetch Metadata with Birdeye fallback ===
+# === Fetch Token Metadata ===
 def fetch_token_metadata(token_address):
     try:
         metadata_pda = get_metadata_pda(token_address)
@@ -41,11 +37,12 @@ def fetch_token_metadata(token_address):
 
         name = decoded[1 + 32 + 32:1 + 32 + 32 + 32].decode('utf-8').rstrip('\x00')
         symbol = decoded[1 + 32 + 32 + 32:1 + 32 + 32 + 32 + 10].decode('utf-8').rstrip('\x00')
-        return name, symbol
+        decimals = int(solana_client.get_token_supply(Pubkey.from_string(token_address))["result"]["value"]["decimals"])
+        return name, symbol, decimals
 
     except Exception as e:
-        print(f"[Metaplex ERROR]: {e}")
-        return "UnknownToken", "UNKNOWN"
+        print(f"[ERROR]: {e}")
+        return "UnknownToken", "UNKNOWN", 0
 
 # === Token Save/Load ===
 def load_tokens():
@@ -113,7 +110,7 @@ def fetch_transaction_details(sig):
 
 # === Format & Send Message ===
 async def send_transaction_data(token_address, txs, application):
-    token_name, token_symbol = fetch_token_metadata(token_address)
+    token_name, token_symbol, decimals = fetch_token_metadata(token_address)
 
     for tx in txs:
         tx_hash = tx.get("signature", "N/A")
@@ -135,7 +132,7 @@ async def send_transaction_data(token_address, txs, application):
                         info = parsed.get("info", {})
                         if info.get("mint") == token_address:
                             raw = int(info.get("amount", 0))
-                            amount_bought = f"{raw / (10**6):,.4f}"  # assuming 6 decimals for Solana token
+                            amount_bought = f"{raw / (10**decimals):,.4f}"
 
         except Exception as e:
             print(f"[Error Processing Transaction]: {e}")
@@ -180,7 +177,6 @@ async def monitor_transactions(application):
 def main():
     print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("add", add_token))
     app.add_handler(CommandHandler("remove", remove_token))
 
