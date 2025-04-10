@@ -1,14 +1,13 @@
 import os
-import json
-import base64
-import asyncio
 import requests
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
-from dotenv import load_dotenv
+from telegram import Bot
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
-from solders.rpc.config import RpcAccountInfoConfig
+import base64
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -17,10 +16,11 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
 
+# Solana client and metadata program ID
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
-# Delete any existing webhook
+# === Delete any existing webhook ===
 def delete_webhook():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook"
     response = requests.post(url)
