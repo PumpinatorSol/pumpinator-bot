@@ -20,15 +20,13 @@ TOKENS_FILE = 'added_tokens.txt'
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
-monitor_task = None
-
-# Delete existing webhook (if any)
+# Delete any existing webhook
 def delete_webhook():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook"
     response = requests.post(url)
     print(response.json())
 
-delete_webhook()  # Make sure to delete any existing webhook
+delete_webhook()  # Ensure we delete any existing webhook
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
