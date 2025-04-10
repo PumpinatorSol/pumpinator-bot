@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 import asyncio
 import requests
@@ -7,6 +8,9 @@ from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
+from solders.rpc.config import RpcAccountInfoConfig
+
+print("🚀 Starting bot...")
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +21,8 @@ TOKENS_FILE = 'added_tokens.txt'
 
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
+
+monitor_task = None
 
 # === PDA Calculation ===
 def get_metadata_pda(mint):
