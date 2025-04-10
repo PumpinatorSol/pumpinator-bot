@@ -4,10 +4,11 @@ import base64
 import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
+from solders.rpc.config import RpcAccountInfoConfig
 
 print("🚀 Starting bot...")
 
@@ -18,26 +19,17 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
 
-# Initialize Solana Client
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
-# === Load & Save Tokens ===
-def load_tokens():
-    if os.path.exists(TOKENS_FILE):
-        with open(TOKENS_FILE, 'r') as f:
-            return f.read().splitlines()
-    return []
+monitor_task = None
 
-def save_tokens(tokens):
-    with open(TOKENS_FILE, 'w') as f:
-        f.write('\n'.join(tokens))
-
-# === Fetch Metadata ===
+# === PDA Calculation ===
 def get_metadata_pda(mint):
     seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
     return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
 
+# === Fetch Metadata with Birdeye fallback ===
 def fetch_token_metadata(token_address):
     try:
         metadata_pda = get_metadata_pda(token_address)
@@ -54,90 +46,168 @@ def fetch_token_metadata(token_address):
         symbol = decoded[1 + 32 + 32 + 32:1 + 32 + 32 + 32 + 10].decode('utf-8').rstrip('\x00')
         decimals = int(solana_client.get_token_supply(Pubkey.from_string(token_address))["result"]["value"]["decimals"])
         return name, symbol, decimals
+
     except Exception as e:
         print(f"[Metaplex ERROR]: {e}")
-        return None, None, None
+        print(f"[Fallback] Using Birdeye for {token_address}")
+        try:
+            res = requests.get(f"https://public-api.birdeye.so/public/token/{token_address}", headers={"X-API-KEY": "public"})
+            data = res.json().get("data", {})
+            return data.get("name", "UnknownToken"), data.get("symbol", "UNKNOWN"), int(data.get("decimals", 0))
+        except Exception as fallback_error:
+            print(f"[Birdeye ERROR]: {fallback_error}")
 
-# === Fetch Transactions ===
-def fetch_recent_transactions(token_address, limit=5):
+    return "UnknownToken", "UNKNOWN", 0
+
+# === Token Save/Load ===
+def load_tokens():
+    return open(TOKENS_FILE).read().splitlines() if os.path.exists(TOKENS_FILE) else []
+
+def save_tokens(tokens):
+    with open(TOKENS_FILE, 'w') as f:
+        f.write('\n'.join(tokens))
+
+# === Telegram Commands ===
+async def add_token(update: Update, context: CallbackContext):
+    if len(context.args) == 1:
+        token = context.args[0]
+        tokens = load_tokens()
+        if token not in tokens:
+            tokens.append(token)
+            save_tokens(tokens)
+            await update.message.reply_text(f"✅ Token added: {token}")
+        else:
+            await update.message.reply_text("⚠️ Already tracking that token.")
+    else:
+        await update.message.reply_text("Usage: /add <token_mint>")
+
+async def remove_token(update: Update, context: CallbackContext):
+    if len(context.args) == 1:
+        token = context.args[0]
+        tokens = load_tokens()
+        if token in tokens:
+            tokens.remove(token)
+            save_tokens(tokens)
+            await update.message.reply_text(f"❌ Token removed: {token}")
+        else:
+            await update.message.reply_text("Token not found.")
+    else:
+        await update.message.reply_text("Usage: /remove <token_mint>")
+
+# === Solana Fetchers ===
+def fetch_recent_transactions(token_address):
     try:
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "getSignaturesForAddress",
-            "params": [token_address, {"limit": limit}]
+            "params": [token_address, {"limit": 5}]
         }
-        response = requests.post(SOLANA_RPC_URL, json=payload)
-        if response.status_code != 200:
-            print("Error fetching transactions:", response.status_code)
-            return []
-
-        # Debug: Print raw response data to understand its structure
-        response_data = response.json()
-        print("Raw Response Data:", response_data)
-
-        txs = response_data.get('result', [])
-        return txs if isinstance(txs, list) else []
+        res = requests.post(SOLANA_RPC_URL, json=payload)
+        return res.json().get("result", [])
     except Exception as e:
-        print(f"Error fetching transactions: {e}")
+        print(f"[TX Fetch ERROR]: {e}")
         return []
 
-# === Send Transaction Data ===
-async def send_transaction_data(tx, application):
-    if tx:
+def fetch_transaction_details(sig):
+    try:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTransaction",
+            "params": [sig, "jsonParsed"]
+        }
+        res = requests.post(SOLANA_RPC_URL, json=payload)
+        return res.json().get("result", {})
+    except Exception as e:
+        print(f"[Transaction Details Fetch ERROR]: {e}")
+        return {}
+
+# === Format & Send Message ===
+async def send_transaction_data(token_address, txs, application):
+    token_name, token_symbol, decimals = fetch_token_metadata(token_address)
+
+    for tx in txs:
         tx_hash = tx.get("signature", "N/A")
-        if not tx_hash:
-            print("Skipping transaction with no signature.")
-            return
+        details = fetch_transaction_details(tx_hash)
+        if not details:
+            continue
 
-        # Fetch metadata for the token associated with this transaction
-        token_name, token_symbol, decimals = fetch_token_metadata(tx_hash)  # assuming tx_hash is token address here
-        if not token_name:
-            token_name = "Unknown Token"
-            token_symbol = "UNKNOWN"
+        try:
+            meta = details.get("meta", {})
+            sol_spent = (meta.get("preBalances", [0])[0] - meta.get("postBalances", [0])[0]) / 1e9
+            keys = details["transaction"]["message"].get("accountKeys", [])
+            buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
-        # Example data for now
-        amount_spent = '0.72 SOL'
-        usd_value = '106.34'
-        token_amount = '843,212.22'
+            amount_bought = "? "
+            for inner in meta.get("innerInstructions", []):
+                for ix in inner.get("instructions", []):
+                    parsed = ix.get("parsed", {})
+                    if parsed.get("type") == "transfer":
+                        info = parsed.get("info", {})
+                        if info.get("mint") == token_address:
+                            raw = int(info.get("amount", 0))
+                            amount_bought = f"{raw / (10**decimals):,.4f}"
+
+        except Exception as e:
+            print(f"[Error Processing Transaction]: {e}")
+            sol_spent = 0
+            buyer = "unknown"
+            amount_bought = "?"
 
         message = f"""
-<b>{token_name.upper()} BUY!</b>
+<b>💸 ${token_symbol} Buy Detected!</b>
 
-💰 Amount Spent: {amount_spent} (${usd_value})  
-🔹 {token_amount} {token_symbol} Purchased  
-🔸 Price: $0.000126  
-📈 Position Change: +3.4%
+🔹 <b>{amount_bought}</b> {token_symbol} Purchased  
+💰 <b>{sol_spent:.4f} SOL</b> Spent  
+👤 Buyer: <a href="https://solscan.io/account/{buyer}">{buyer[:8]}...{buyer[-4:]}</a>
+""".strip()
 
-📝 <a href="https://solscan.io/tx/{tx_hash}">Transaction</a>
-"""
-        button = InlineKeyboardButton("🔗 View Transaction", url=f"https://solscan.io/tx/{tx_hash}")
-        keyboard = InlineKeyboardMarkup([[button]])
-
-        await application.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="HTML", reply_markup=keyboard)
+        keyboard = InlineKeyboardMarkup([ 
+            [InlineKeyboardButton("🔗 TX", url=f"https://solscan.io/tx/{tx_hash}")] 
+        ])
+        await application.bot.send_message( 
+            chat_id=CHAT_ID, 
+            text=message, 
+            parse_mode="HTML", 
+            reply_markup=keyboard 
+        )
 
 # === Monitor Loop ===
 async def monitor_transactions(application):
-    while True:
-        token_addresses = load_tokens()
-        for token_address in token_addresses:
-            txs = fetch_recent_transactions(token_address, limit=5)  # Fetch up to 5 transactions per token
-            if txs:
-                for tx in txs:
-                    await send_transaction_data(tx, application)  # Pass each transaction individually
-        await asyncio.sleep(60)  # Check every 60 seconds for new transactions
+    print("✅ Monitoring started...")
+    try:
+        while True:
+            tokens = load_tokens()
+            if not tokens:
+                print("⚠️ No tokens being tracked.")
+            for token in tokens:
+                txs = fetch_recent_transactions(token)
+                await send_transaction_data(token, txs, application)
+            await asyncio.sleep(60)
+    except asyncio.CancelledError:
+        print("🛑 Monitor task cancelled.")
 
-# === Bot Setup ===
+# === Launch Bot ===
 def main():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("add", add_token))
-    application.add_handler(CommandHandler("remove", remove_token))
-    application.add_handler(CommandHandler("start", lambda update, context: update.message.reply_text("Bot is live!")))
+    print("🟢 Initializing bot...")
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("add", add_token))
+    app.add_handler(CommandHandler("remove", remove_token))
 
-    asyncio.run(monitor_transactions(application))  # Run monitoring task
+    async def post_init(app):
+        global monitor_task
+        monitor_task = asyncio.create_task(monitor_transactions(app))
 
-    print("Bot is running...")
-    application.run_polling()
+    async def shutdown(app):
+        if monitor_task:
+            monitor_task.cancel()
+
+    app.post_init = post_init
+    app.shutdown = shutdown
+
+    # Start polling the bot
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
