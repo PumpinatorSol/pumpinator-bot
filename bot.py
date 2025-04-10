@@ -139,7 +139,7 @@ async def send_transaction_data(token_address, txs, application):
             keys = details["transaction"]["message"].get("accountKeys", [])
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
-            amount_bought = "?"
+            amount_bought = "? "
             for inner in meta.get("innerInstructions", []):
                 for ix in inner.get("instructions", []):
                     parsed = ix.get("parsed", {})
@@ -155,7 +155,6 @@ async def send_transaction_data(token_address, txs, application):
             buyer = "unknown"
             amount_bought = "?"
 
-        # Format message without Solscan image
         message = f"""
 <b>💸 ${token_symbol} Buy Detected!</b>
 
