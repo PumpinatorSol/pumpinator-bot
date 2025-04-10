@@ -155,6 +155,7 @@ async def send_transaction_data(token_address, txs, application):
             buyer = "unknown"
             amount_bought = "?"
 
+        # Format message without Solscan image
         message = f"""
 <b>💸 ${token_symbol} Buy Detected!</b>
 
