@@ -1,44 +1,35 @@
 import os
+import json
 import base64
-import requests
 import asyncio
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
 from solana.rpc.api import Client
+from solders.rpc.config import RpcAccountInfoConfig
 
-# Load environment variables from .env file
+print("🚀 Starting bot...")
+
+# Load environment variables
 load_dotenv()
-
-# Fetching environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKENS_FILE = 'added_tokens.txt'
 
-# Solana Metadata Program ID (used to fetch token metadata)
 METADATA_PROGRAM_ID = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
 solana_client = Client(SOLANA_RPC_URL)
 
-# Global variable to store monitor task
 monitor_task = None
 
-# === Clear Webhook function to ensure no conflicting webhooks are used ===
-def clear_webhook():
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook"
-    response = requests.post(url)
-    if response.status_code == 200:
-        print("Webhook cleared successfully.")
-    else:
-        print("Failed to clear webhook.")
-
-# === PDA Calculation function to generate the metadata account address ===
+# === PDA Calculation ===
 def get_metadata_pda(mint):
     seeds = [b"metadata", bytes(METADATA_PROGRAM_ID), bytes(Pubkey.from_string(mint))]
     return Pubkey.find_program_address(seeds, METADATA_PROGRAM_ID)[0]
 
-# === Fetch token metadata (name, symbol, and decimals) with fallback to Birdeye API ===
+# === Fetch Metadata with Birdeye fallback ===
 def fetch_token_metadata(token_address):
     try:
         metadata_pda = get_metadata_pda(token_address)
@@ -68,7 +59,7 @@ def fetch_token_metadata(token_address):
 
     return "UnknownToken", "UNKNOWN", 0
 
-# === Token Save/Load functions to track the tokens being monitored ===
+# === Token Save/Load ===
 def load_tokens():
     return open(TOKENS_FILE).read().splitlines() if os.path.exists(TOKENS_FILE) else []
 
@@ -76,7 +67,7 @@ def save_tokens(tokens):
     with open(TOKENS_FILE, 'w') as f:
         f.write('\n'.join(tokens))
 
-# === Telegram Commands to add or remove tokens from the tracking list ===
+# === Telegram Commands ===
 async def add_token(update: Update, context: CallbackContext):
     if len(context.args) == 1:
         token = context.args[0]
@@ -103,7 +94,7 @@ async def remove_token(update: Update, context: CallbackContext):
     else:
         await update.message.reply_text("Usage: /remove <token_mint>")
 
-# === Solana Fetcher functions to track transactions ===
+# === Solana Fetchers ===
 def fetch_recent_transactions(token_address):
     try:
         payload = {
@@ -132,7 +123,7 @@ def fetch_transaction_details(sig):
         print(f"[Transaction Details Fetch ERROR]: {e}")
         return {}
 
-# === Format and send the transaction details to Telegram ===
+# === Format & Send Message ===
 async def send_transaction_data(token_address, txs, application):
     token_name, token_symbol, decimals = fetch_token_metadata(token_address)
 
@@ -144,7 +135,7 @@ async def send_transaction_data(token_address, txs, application):
 
         try:
             meta = details.get("meta", {})
-            sol_spent = (meta.get("preBalances", [0])[0] - meta.get("postBalances", [0])[0]) / 1e9
+            sol_spent = max((meta.get("preBalances", [0])[0] - meta.get("postBalances", [0])[0]) / 1e9, 0)  # Ensure no negative values
             keys = details["transaction"]["message"].get("accountKeys", [])
             buyer = keys[0]["pubkey"] if isinstance(keys[0], dict) else keys[0]
 
@@ -182,7 +173,7 @@ async def send_transaction_data(token_address, txs, application):
             reply_markup=keyboard 
         )
 
-# === Monitor Loop to keep checking for new transactions ===
+# === Monitor Loop ===
 async def monitor_transactions(application):
     print("✅ Monitoring started...")
     try:
@@ -197,15 +188,10 @@ async def monitor_transactions(application):
     except asyncio.CancelledError:
         print("🛑 Monitor task cancelled.")
 
-# === Main function to initialize the bot and polling ===
+# === Launch Bot ===
 def main():
-    # Clear any existing webhook before starting polling
-    clear_webhook()
-
-    # Initialize the bot application with the bot token
+    print("🟢 Initializing bot...")
     app = Application.builder().token(BOT_TOKEN).build()
-
-    # Add command handlers for adding and removing tokens to track
     app.add_handler(CommandHandler("add", add_token))
     app.add_handler(CommandHandler("remove", remove_token))
 
