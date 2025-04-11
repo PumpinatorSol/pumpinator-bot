@@ -150,13 +150,24 @@ connection.onLogs('all', async (logInfo) => {
     let tokenAmount = 0;
     const innerInstructions = txDetails.meta?.innerInstructions || [];
 
+    // ✅ Improved transfer detection logic
     innerInstructions.forEach(ix => {
       ix.instructions.forEach(inner => {
-        if (
-          inner.parsed?.info?.mint === mint &&
-          ['transfer', 'transferChecked'].includes(inner.parsed?.type)
-        ) {
-          tokenAmount += parseInt(inner.parsed.info.amount);
+        const parsed = inner.parsed;
+        if (!parsed || !parsed.info) return;
+
+        const info = parsed.info;
+        const isRelevantTransfer =
+          parsed.type === 'transferChecked' ||
+          parsed.type === 'transfer';
+
+        const involvedMint =
+          info.mint ||
+          info.sourceMint ||
+          info.destinationMint;
+
+        if (isRelevantTransfer && involvedMint === mint) {
+          tokenAmount += parseInt(info.amount || '0');
         }
       });
     });
