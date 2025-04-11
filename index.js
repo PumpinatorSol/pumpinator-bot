@@ -36,7 +36,7 @@ app.listen(PORT, HOST, () => {
   console.log(`🌐 Webhook server running on http://localhost:${PORT}`);
 });
 
-const WEBHOOK_URL = `https://${config.baseUrl}/bot${config.botToken}`;
+const WEBHOOK_URL = `${config.baseUrl}/bot${config.botToken}`;
 console.log('🌐 Attempting to register webhook:', WEBHOOK_URL);
 bot.setWebHook(WEBHOOK_URL);
 
