@@ -7,12 +7,15 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 
+// ✅ Use /tmp directory for safe write access on Render
+const tokenFilePath = path.join('/tmp', 'added_tokens.txt');
+
 const config = {
   botToken: process.env.BOT_TOKEN,
   chatId: process.env.TELEGRAM_CHAT_ID,
   adminId: process.env.ADMIN_ID,
   rpcUrl: process.env.SOLANA_RPC_URL,
-  tokensFile: '/data/added_tokens.txt',
+  tokensFile: tokenFilePath,
   baseUrl: process.env.RENDER_EXTERNAL_URL
 };
 
@@ -57,10 +60,6 @@ bot.onText(/\/add (.+)/, async (msg, match) => {
     }
 
     const decimals = mintAccountInfo.value.data.parsed.info.decimals;
-
-    if (!fs.existsSync('/data')) {
-      fs.mkdirSync('/data');
-    }
 
     if (!fs.existsSync(config.tokensFile)) {
       fs.writeFileSync(config.tokensFile, '');
