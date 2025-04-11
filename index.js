@@ -123,60 +123,53 @@ const loadTrackedTokens = () => {
 
 connection.onLogs('all', async (logInfo) => {
   const trackedTokens = loadTrackedTokens();
-
-  const { signature, logs } = logInfo;
-  const logText = logs.join('\n');
-
-  console.log(`📱 Received log: ${logText}`);
-
-  const tokenMatch = trackedTokens.find(token => logText.includes(token.mint));
-  if (!tokenMatch) return;
-
-  const { mint, decimals } = tokenMatch;
-  console.log(`🎯 Buy detected for ${mint} — TX: ${signature}`);
+  const { signature } = logInfo;
 
   try {
     const txDetails = await connection.getParsedTransaction(signature, 'confirmed');
     if (!txDetails) return;
 
-    console.log(`🧐 Full transaction log for ${signature}:`);
-    console.dir(txDetails, { depth: null });
-
-    const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer)?.pubkey.toString() || 'Unknown';
-    const slot = txDetails.slot;
+    const { transaction, meta, slot } = txDetails;
+    const accountKeys = transaction.message.accountKeys.map(k => k.pubkey.toString());
+    const buyer = accountKeys.find((_, idx) => transaction.message.accountKeys[idx].signer) || 'Unknown';
 
     let tokenAmount = 0;
-    const innerInstructions = txDetails.meta.innerInstructions || [];
+    let mintAddress = '';
+    let decimals = 0;
 
-    innerInstructions.forEach(ix => {
-      ix.instructions.forEach(inner => {
-        console.log('🧾 Parsed inner:', JSON.stringify(inner));
-        if (inner.parsed?.info?.mint === mint && inner.parsed?.type === 'transfer') {
-          tokenAmount += parseInt(inner.parsed.info.amount);
+    for (const inner of meta.innerInstructions || []) {
+      for (const instr of inner.instructions) {
+        if (instr.parsed?.type === 'transfer') {
+          const mint = instr.parsed.info.mint;
+          const tracked = trackedTokens.find(t => t.mint === mint);
+          if (tracked) {
+            tokenAmount += parseInt(instr.parsed.info.amount);
+            mintAddress = mint;
+            decimals = tracked.decimals;
+          }
         }
-      });
-    });
-
-    const tokenAmountFormatted = tokenAmount / Math.pow(10, decimals);
-
-    let usdPrice = 0;
-    let usdValue = 0;
-    try {
-      const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/solana/${mint}`);
-      const dexData = await dexRes.json();
-
-      if (dexData.pair && dexData.pair.priceUsd) {
-        usdPrice = parseFloat(dexData.pair.priceUsd);
-        usdValue = tokenAmountFormatted * usdPrice;
       }
-    } catch (e) {
-      console.warn('❌ DexScreener price fetch failed.');
     }
 
-    const msg = `💰 *New Buy Detected!*\nToken: [${mint}](https://solscan.io/token/${mint})\nBuyer: [${buyer}](https://solscan.io/account/${buyer})\nSlot: ${slot}\nAmount: ${tokenAmountFormatted.toFixed(2)} tokens\n💵 Value: ~$${usdValue.toFixed(2)} USD\n[View on Solscan](https://solscan.io/tx/${signature})`;
+    if (tokenAmount > 0) {
+      const tokenAmountFormatted = tokenAmount / Math.pow(10, decimals);
+      let usdPrice = 0;
+      let usdValue = 0;
+      try {
+        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/solana/${mintAddress}`);
+        const dexData = await dexRes.json();
+        if (dexData.pair && dexData.pair.priceUsd) {
+          usdPrice = parseFloat(dexData.pair.priceUsd);
+          usdValue = tokenAmountFormatted * usdPrice;
+        }
+      } catch (e) {
+        console.warn('❌ DexScreener price fetch failed.');
+      }
 
-    bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
+      const msg = `💰 *New Buy Detected!*\nToken: [${mintAddress}](https://solscan.io/token/${mintAddress})\nBuyer: [${buyer}](https://solscan.io/account/${buyer})\nSlot: ${slot}\nAmount: ${tokenAmountFormatted.toFixed(2)} tokens\n💵 Value: ~$${usdValue.toFixed(2)} USD\n[View on Solscan](https://solscan.io/tx/${signature})`;
 
+      bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
+    }
   } catch (err) {
     console.error('❌ Error parsing transaction:', err);
   }
