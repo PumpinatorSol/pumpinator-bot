@@ -127,6 +127,8 @@ connection.onLogs('all', async (logInfo) => {
   const { signature, logs } = logInfo;
   const logText = logs.join('\n');
 
+  console.log(`📡 Received log: ${logText}`);
+
   const tokenMatch = trackedTokens.find(token => logText.includes(token.mint));
   if (!tokenMatch) return;
 
@@ -145,6 +147,7 @@ connection.onLogs('all', async (logInfo) => {
 
     innerInstructions.forEach(ix => {
       ix.instructions.forEach(inner => {
+        console.log('🧾 Parsed inner:', JSON.stringify(inner));
         if (inner.parsed?.info?.mint === mint && inner.parsed?.type === 'transfer') {
           tokenAmount += parseInt(inner.parsed.info.amount);
         }
