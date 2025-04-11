@@ -14,11 +14,13 @@ const config = {
 };
 
 const connection = new Connection(config.rpcUrl, 'confirmed');
-const bot = new TelegramBot(config.botToken, { polling: true });
+
+// ✅ Polling turned OFF to prevent 409 conflicts
+const bot = new TelegramBot(config.botToken, { polling: false });
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
 
-// --- Token Add Command ---
+// --- Token Add Command (via webhook or future upgrade) ---
 bot.onText(/\/add (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const mintAddress = match[1].trim();
