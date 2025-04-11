@@ -14,13 +14,11 @@ const config = {
 };
 
 const connection = new Connection(config.rpcUrl, 'confirmed');
-
-// ✅ Polling turned OFF to prevent 409 conflicts
 const bot = new TelegramBot(config.botToken, { polling: false });
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
 
-// --- Token Add Command (via webhook or future upgrade) ---
+// --- Token Add Command ---
 bot.onText(/\/add (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const mintAddress = match[1].trim();
@@ -35,13 +33,25 @@ bot.onText(/\/add (.+)/, async (msg, match) => {
 
     const decimals = mintAccountInfo.value.data.parsed.info.decimals;
 
+    // Ensure file exists
+    if (!fs.existsSync(config.tokensFile)) {
+      fs.writeFileSync(config.tokensFile, '');
+    }
+
     const existing = fs.readFileSync(config.tokensFile, 'utf-8').split('\n').filter(Boolean);
     if (existing.find(line => line.startsWith(mintAddress))) {
       return bot.sendMessage(chatId, `⚠️ Token already tracked.`);
     }
 
-    fs.appendFileSync(config.tokensFile, `${mintAddress},${decimals}\n`);
-    bot.sendMessage(chatId, `✅ Token added!\nMint: \`${mintAddress}\`\nDecimals: ${decimals}`, { parse_mode: 'Markdown' });
+    const tokenLine = `${mintAddress},${decimals}\n`;
+    fs.appendFileSync(config.tokensFile, tokenLine);
+
+    console.log(`✅ Token saved to ${config.tokensFile}: ${tokenLine.trim()}`);
+
+    bot.sendMessage(chatId, `✅ Token added!\nMint: \`${mintAddress}\`\nDecimals: ${decimals}`, {
+      parse_mode: 'Markdown'
+    });
+
   } catch (err) {
     console.error('❌ Error in /add:', err);
     bot.sendMessage(chatId, '❌ Failed to fetch token info. Make sure the mint is valid.');
@@ -134,13 +144,7 @@ connection.onLogs('all', async (logInfo) => {
       console.warn('❌ DexScreener price fetch failed.');
     }
 
-    const msg = `💰 *New Buy Detected!*
-Token: [${mint}](https://solscan.io/token/${mint})
-Buyer: [${buyer}](https://solscan.io/account/${buyer})
-Slot: ${slot}
-Amount: ${tokenAmountFormatted.toFixed(2)} tokens
-💵 Value: ~$${usdValue.toFixed(2)} USD
-[View on Solscan](https://solscan.io/tx/${signature})`;
+    const msg = `💰 *New Buy Detected!*\nToken: [${mint}](https://solscan.io/token/${mint})\nBuyer: [${buyer}](https://solscan.io/account/${buyer})\nSlot: ${slot}\nAmount: ${tokenAmountFormatted.toFixed(2)} tokens\n💵 Value: ~$${usdValue.toFixed(2)} USD\n[View on Solscan](https://solscan.io/tx/${signature})`;
 
     bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
 
