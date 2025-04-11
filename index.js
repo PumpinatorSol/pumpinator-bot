@@ -13,7 +13,15 @@ const config = {
   tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt'
 };
 
+// Log loaded config for debug (DO NOT log tokens in production)
+console.log('🔐 Loaded config:');
+console.log(`  - RPC: ${config.rpcUrl}`);
+console.log(`  - Chat ID: ${config.chatId}`);
+console.log(`  - Token File: ${config.tokensFile}`);
+
 const connection = new Connection(config.rpcUrl, 'confirmed');
+console.log('✅ Connected to Solana WebSocket...');
+
 const bot = new TelegramBot(config.botToken, { polling: false });
 
 // Replace with the token you want to track
@@ -22,8 +30,11 @@ const TOKEN_MINT = 'TOKEN_MINT_ADDRESS_HERE';
 // Replace with the Jupiter or Raydium market address or pool ID if needed
 const MARKET_PROGRAM_ID = new PublicKey('JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB');
 
+console.log('🚀 Buybot is running... waiting for buys...');
+
 // Subscribe to all logs on the chain, filtering later
 connection.onLogs('all', async (logInfo) => {
+  console.log('📡 Received log from Solana RPC...'); // Add heartbeat log
   try {
     const { signature, logs } = logInfo;
     const logText = logs.join('\n');
@@ -31,12 +42,16 @@ connection.onLogs('all', async (logInfo) => {
     // Filter: Make sure this includes the token mint (basic check)
     if (!logText.includes(TOKEN_MINT)) return;
 
-    console.log(`Transaction detected for token ${TOKEN_MINT} - Signature: ${signature}`);
+    console.log(`🎯 Transaction matched token ${TOKEN_MINT}`);
+    console.log(`🔍 Signature: ${signature}`);
 
     const txDetails = await connection.getParsedTransaction(signature, 'confirmed');
-    if (!txDetails) return;
+    if (!txDetails) {
+      console.log('⚠️ Transaction details not found.');
+      return;
+    }
 
-    const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer).pubkey.toString();
+    const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer)?.pubkey.toString() || 'Unknown';
     const slot = txDetails.slot;
 
     const msg = `💰 *New Buy Detected!*
@@ -48,6 +63,6 @@ Slot: ${slot}
     bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
 
   } catch (err) {
-    console.error('Error in buybot:', err);
+    console.error('❌ Error in buybot:', err);
   }
 });
