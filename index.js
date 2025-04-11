@@ -14,7 +14,7 @@ const config = {
 };
 
 const connection = new Connection(config.rpcUrl, 'confirmed');
-const bot = new TelegramBot(config.botToken, { polling: false });
+const bot = new TelegramBot(config.botToken, { polling: true });
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
 
@@ -47,6 +47,7 @@ bot.onText(/\/add (.+)/, async (msg, match) => {
     fs.appendFileSync(config.tokensFile, tokenLine);
 
     console.log(`✅ Token saved to ${config.tokensFile}: ${tokenLine.trim()}`);
+    console.log('📦 Updated tracked tokens list:\n', fs.readFileSync(config.tokensFile, 'utf-8'));
 
     bot.sendMessage(chatId, `✅ Token added!\nMint: \`${mintAddress}\`\nDecimals: ${decimals}`, {
       parse_mode: 'Markdown'
