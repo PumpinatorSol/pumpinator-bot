@@ -11,7 +11,7 @@ const config = {
   chatId: process.env.TELEGRAM_CHAT_ID,
   adminId: process.env.ADMIN_ID,
   rpcUrl: process.env.SOLANA_RPC_URL,
-  tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt',
+  tokensFile: process.env.TOKENS_FILE || '/data/added_tokens.txt',
   baseUrl: process.env.RENDER_EXTERNAL_URL
 };
 
