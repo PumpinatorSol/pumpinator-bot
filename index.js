@@ -37,6 +37,7 @@ app.listen(PORT, HOST, () => {
 });
 
 const WEBHOOK_URL = `https://${config.baseUrl}/bot${config.botToken}`;
+console.log('🌐 Attempting to register webhook:', WEBHOOK_URL);
 bot.setWebHook(WEBHOOK_URL);
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
@@ -56,7 +57,6 @@ bot.onText(/\/add (.+)/, async (msg, match) => {
 
     const decimals = mintAccountInfo.value.data.parsed.info.decimals;
 
-    // Ensure file exists
     if (!fs.existsSync(config.tokensFile)) {
       fs.writeFileSync(config.tokensFile, '');
     }
@@ -153,7 +153,6 @@ connection.onLogs('all', async (logInfo) => {
 
     const tokenAmountFormatted = tokenAmount / Math.pow(10, decimals);
 
-    // Get USD price
     let usdPrice = 0;
     let usdValue = 0;
     try {
