@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const express = require('express');
 const { Connection, PublicKey } = require('@solana/web3.js');
 const TelegramBot = require('node-telegram-bot-api');
 const fetch = require('node-fetch');
@@ -10,11 +11,33 @@ const config = {
   chatId: process.env.TELEGRAM_CHAT_ID,
   adminId: process.env.ADMIN_ID,
   rpcUrl: process.env.SOLANA_RPC_URL,
-  tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt'
+  tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt',
+  baseUrl: process.env.RENDER_EXTERNAL_URL
 };
 
 const connection = new Connection(config.rpcUrl, 'confirmed');
-const bot = new TelegramBot(config.botToken, { polling: true });
+const bot = new TelegramBot(config.botToken, {
+  webHook: {
+    port: process.env.PORT || 3000
+  }
+});
+
+const app = express();
+app.use(express.json());
+
+app.post(`/bot${config.botToken}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+const HOST = '0.0.0.0';
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, HOST, () => {
+  console.log(`🌐 Webhook server running on http://localhost:${PORT}`);
+});
+
+const WEBHOOK_URL = `https://${config.baseUrl}/bot${config.botToken}`;
+bot.setWebHook(WEBHOOK_URL);
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
 
