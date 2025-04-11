@@ -1,9 +1,19 @@
+require('dotenv').config(); // Load environment variables
+
 const { Connection, PublicKey } = require('@solana/web3.js');
 const TelegramBot = require('node-telegram-bot-api');
 const fetch = require('node-fetch');
-const config = require('./config.json');
 
-const connection = new Connection(config.rpcUrl);
+// Set up config using .env values
+const config = {
+  botToken: process.env.BOT_TOKEN,
+  chatId: process.env.TELEGRAM_CHAT_ID,
+  adminId: process.env.ADMIN_ID,
+  rpcUrl: process.env.SOLANA_RPC_URL,
+  tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt'
+};
+
+const connection = new Connection(config.rpcUrl, 'confirmed');
 const bot = new TelegramBot(config.botToken, { polling: false });
 
 // Replace with the token you want to track
@@ -18,7 +28,7 @@ connection.onLogs('all', async (logInfo) => {
     const { signature, logs } = logInfo;
     const logText = logs.join('\n');
 
-    // Filter: Make sure this is a Jupiter or Raydium log, and it includes the token mint
+    // Filter: Make sure this includes the token mint (basic check)
     if (!logText.includes(TOKEN_MINT)) return;
 
     console.log(`Transaction detected for token ${TOKEN_MINT} - Signature: ${signature}`);
