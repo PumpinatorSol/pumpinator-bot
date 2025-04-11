@@ -1,22 +1,21 @@
 {
   "name": "pumpinator-bot",
   "version": "1.0.0",
-  "main": "bot.js",
+  "description": "A Telegram buybot for tracking Solana token buys in real time.",
+  "main": "index.js",
   "scripts": {
-    "start": "node bot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@solana/web3.js": "^1.43.0",
-    "axios": "^1.8.4",
-    "dotenv": "^16.5.0",
-    "mongodb": "^6.15.0",
-    "node-fetch": "^3.3.2",
-    "node-telegram-bot-api": "^0.63.0",
-    "telegraf": "^4.16.3"
+    "@solana/web3.js": "^1.73.2",
+    "node-fetch": "^2.6.7",
+    "node-telegram-bot-api": "^0.61.0",
+    "dotenv": "^16.3.1"
   },
-  "description": "A bot to track and alert token buys on Solana via DexScreener"
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["solana", "telegram", "buybot", "crypto", "nodejs"],
+  "author": "You",
+  "license": "MIT"
 }
