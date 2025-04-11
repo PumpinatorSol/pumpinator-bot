@@ -13,7 +13,6 @@ const config = {
   tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt'
 };
 
-// Log loaded config for debug (DO NOT log tokens in production)
 console.log('🔐 Loaded config:');
 console.log(`  - RPC: ${config.rpcUrl}`);
 console.log(`  - Chat ID: ${config.chatId}`);
@@ -32,7 +31,6 @@ const MARKET_PROGRAM_ID = new PublicKey('JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33Wc
 
 console.log('🚀 Buybot is running... waiting for buys...');
 
-// Subscribe to all logs on the chain, filtering later
 connection.onLogs('all', async (logInfo) => {
   try {
     const { signature, logs } = logInfo;
@@ -53,10 +51,46 @@ connection.onLogs('all', async (logInfo) => {
     const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer)?.pubkey.toString() || 'Unknown';
     const slot = txDetails.slot;
 
+    // Attempt to detect how many tokens were bought
+    let tokenAmount = 0;
+    try {
+      const innerInstructions = txDetails.meta.innerInstructions || [];
+      innerInstructions.forEach(ix => {
+        ix.instructions.forEach(inner => {
+          if (inner.parsed?.info?.mint === TOKEN_MINT && inner.parsed?.type === 'transfer') {
+            tokenAmount += parseInt(inner.parsed.info.amount);
+          }
+        });
+      });
+    } catch (e) {
+      console.warn('Could not determine token amount.');
+    }
+
+    // Convert raw token amount (assumes 9 decimals, adjust if needed)
+    const tokenAmountFormatted = tokenAmount / Math.pow(10, 9);
+
+    // 💵 Get USD price from DexScreener
+    let usdPrice = 0;
+    let usdValue = 0;
+
+    try {
+      const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/solana/${TOKEN_MINT}`);
+      const dexData = await dexRes.json();
+
+      if (dexData.pair && dexData.pair.priceUsd) {
+        usdPrice = parseFloat(dexData.pair.priceUsd);
+        usdValue = tokenAmountFormatted * usdPrice;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch USD price from DexScreener.');
+    }
+
     const msg = `💰 *New Buy Detected!*
 Token: [${TOKEN_MINT}](https://solscan.io/token/${TOKEN_MINT})
 Buyer: [${buyer}](https://solscan.io/account/${buyer})
 Slot: ${slot}
+Amount: ${tokenAmountFormatted.toFixed(2)} tokens
+💵 Value: ~$${usdValue.toFixed(2)} USD
 [View on Solscan](https://solscan.io/tx/${signature})`;
 
     bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
