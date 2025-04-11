@@ -34,12 +34,11 @@ console.log('🚀 Buybot is running... waiting for buys...');
 
 // Subscribe to all logs on the chain, filtering later
 connection.onLogs('all', async (logInfo) => {
-  console.log('📡 Received log from Solana RPC...'); // Add heartbeat log
   try {
     const { signature, logs } = logInfo;
     const logText = logs.join('\n');
 
-    // Filter: Make sure this includes the token mint (basic check)
+    // Filter: Only continue if this log mentions our token
     if (!logText.includes(TOKEN_MINT)) return;
 
     console.log(`🎯 Transaction matched token ${TOKEN_MINT}`);
