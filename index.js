@@ -33,11 +33,11 @@ app.post(`/bot${config.botToken}`, (req, res) => {
 const HOST = '0.0.0.0';
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, HOST, () => {
-  console.log(`🌐 Webhook server running on http://localhost:${PORT}`);
+  console.log(`✨ Webhook server running on http://localhost:${PORT}`);
 });
 
 const WEBHOOK_URL = `${config.baseUrl}/bot${config.botToken}`;
-console.log('🌐 Attempting to register webhook:', WEBHOOK_URL);
+console.log('✨ Attempting to register webhook:', WEBHOOK_URL);
 bot.setWebHook(WEBHOOK_URL);
 
 console.log('✅ Buybot is running and connected to Solana RPC...');
@@ -127,7 +127,7 @@ connection.onLogs('all', async (logInfo) => {
   const { signature, logs } = logInfo;
   const logText = logs.join('\n');
 
-  console.log(`📡 Received log: ${logText}`);
+  console.log(`📱 Received log: ${logText}`);
 
   const tokenMatch = trackedTokens.find(token => logText.includes(token.mint));
   if (!tokenMatch) return;
@@ -138,6 +138,9 @@ connection.onLogs('all', async (logInfo) => {
   try {
     const txDetails = await connection.getParsedTransaction(signature, 'confirmed');
     if (!txDetails) return;
+
+    console.log(`🧐 Full transaction log for ${signature}:`);
+    console.dir(txDetails, { depth: null });
 
     const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer)?.pubkey.toString() || 'Unknown';
     const slot = txDetails.slot;
