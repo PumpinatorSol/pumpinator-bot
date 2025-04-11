@@ -1,10 +1,10 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 
 const { Connection, PublicKey } = require('@solana/web3.js');
 const TelegramBot = require('node-telegram-bot-api');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
-// Set up config using .env values
 const config = {
   botToken: process.env.BOT_TOKEN,
   chatId: process.env.TELEGRAM_CHAT_ID,
@@ -13,68 +13,115 @@ const config = {
   tokensFile: process.env.TOKENS_FILE || 'added_tokens.txt'
 };
 
-console.log('🔐 Loaded config:');
-console.log(`  - RPC: ${config.rpcUrl}`);
-console.log(`  - Chat ID: ${config.chatId}`);
-console.log(`  - Token File: ${config.tokensFile}`);
-
 const connection = new Connection(config.rpcUrl, 'confirmed');
-console.log('✅ Connected to Solana WebSocket...');
+const bot = new TelegramBot(config.botToken, { polling: true });
 
-const bot = new TelegramBot(config.botToken, { polling: false });
+console.log('✅ Buybot is running and connected to Solana RPC...');
 
-// Replace with the token you want to track
-const TOKEN_MINT = 'TOKEN_MINT_ADDRESS_HERE';
+// --- Token Add Command ---
+bot.onText(/\/add (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const mintAddress = match[1].trim();
 
-// Replace with the Jupiter or Raydium market address or pool ID if needed
-const MARKET_PROGRAM_ID = new PublicKey('JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB');
+  try {
+    const mintPubkey = new PublicKey(mintAddress);
+    const mintAccountInfo = await connection.getParsedAccountInfo(mintPubkey);
 
-console.log('🚀 Buybot is running... waiting for buys...');
+    if (!mintAccountInfo || !mintAccountInfo.value) {
+      return bot.sendMessage(chatId, '❌ Invalid token mint or not found.');
+    }
+
+    const decimals = mintAccountInfo.value.data.parsed.info.decimals;
+
+    const existing = fs.readFileSync(config.tokensFile, 'utf-8').split('\n').filter(Boolean);
+    if (existing.find(line => line.startsWith(mintAddress))) {
+      return bot.sendMessage(chatId, `⚠️ Token already tracked.`);
+    }
+
+    fs.appendFileSync(config.tokensFile, `${mintAddress},${decimals}\n`);
+    bot.sendMessage(chatId, `✅ Token added!\nMint: \`${mintAddress}\`\nDecimals: ${decimals}`, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error('❌ Error in /add:', err);
+    bot.sendMessage(chatId, '❌ Failed to fetch token info. Make sure the mint is valid.');
+  }
+});
+
+// --- Token Remove Command ---
+bot.onText(/\/remove (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const mintAddress = match[1].trim();
+
+  try {
+    const tokens = fs.readFileSync(config.tokensFile, 'utf-8').split('\n').filter(Boolean);
+    const updated = tokens.filter(line => !line.startsWith(mintAddress));
+
+    if (tokens.length === updated.length) {
+      return bot.sendMessage(chatId, '⚠️ Token not found in tracked list.');
+    }
+
+    fs.writeFileSync(config.tokensFile, updated.join('\n') + '\n');
+    bot.sendMessage(chatId, `✅ Token removed: \`${mintAddress}\``, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error('❌ Error in /remove:', err);
+    bot.sendMessage(chatId, '❌ Failed to update token list.');
+  }
+});
+
+// --- Load token list on start ---
+const loadTrackedTokens = () => {
+  try {
+    return fs.readFileSync(config.tokensFile, 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .map(line => {
+        const [mint, decimals] = line.split(',');
+        return {
+          mint: mint.trim(),
+          decimals: parseInt(decimals.trim())
+        };
+      });
+  } catch {
+    return [];
+  }
+};
 
 connection.onLogs('all', async (logInfo) => {
+  const trackedTokens = loadTrackedTokens();
+
+  const { signature, logs } = logInfo;
+  const logText = logs.join('\n');
+
+  const tokenMatch = trackedTokens.find(token => logText.includes(token.mint));
+  if (!tokenMatch) return;
+
+  const { mint, decimals } = tokenMatch;
+  console.log(`🎯 Buy detected for ${mint} — TX: ${signature}`);
+
   try {
-    const { signature, logs } = logInfo;
-    const logText = logs.join('\n');
-
-    // Filter: Only continue if this log mentions our token
-    if (!logText.includes(TOKEN_MINT)) return;
-
-    console.log(`🎯 Transaction matched token ${TOKEN_MINT}`);
-    console.log(`🔍 Signature: ${signature}`);
-
     const txDetails = await connection.getParsedTransaction(signature, 'confirmed');
-    if (!txDetails) {
-      console.log('⚠️ Transaction details not found.');
-      return;
-    }
+    if (!txDetails) return;
 
     const buyer = txDetails.transaction.message.accountKeys.find(k => k.signer)?.pubkey.toString() || 'Unknown';
     const slot = txDetails.slot;
 
-    // Attempt to detect how many tokens were bought
     let tokenAmount = 0;
-    try {
-      const innerInstructions = txDetails.meta.innerInstructions || [];
-      innerInstructions.forEach(ix => {
-        ix.instructions.forEach(inner => {
-          if (inner.parsed?.info?.mint === TOKEN_MINT && inner.parsed?.type === 'transfer') {
-            tokenAmount += parseInt(inner.parsed.info.amount);
-          }
-        });
+    const innerInstructions = txDetails.meta.innerInstructions || [];
+
+    innerInstructions.forEach(ix => {
+      ix.instructions.forEach(inner => {
+        if (inner.parsed?.info?.mint === mint && inner.parsed?.type === 'transfer') {
+          tokenAmount += parseInt(inner.parsed.info.amount);
+        }
       });
-    } catch (e) {
-      console.warn('Could not determine token amount.');
-    }
+    });
 
-    // Convert raw token amount (assumes 9 decimals, adjust if needed)
-    const tokenAmountFormatted = tokenAmount / Math.pow(10, 9);
+    const tokenAmountFormatted = tokenAmount / Math.pow(10, decimals);
 
-    // 💵 Get USD price from DexScreener
+    // Get USD price
     let usdPrice = 0;
     let usdValue = 0;
-
     try {
-      const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/solana/${TOKEN_MINT}`);
+      const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/pairs/solana/${mint}`);
       const dexData = await dexRes.json();
 
       if (dexData.pair && dexData.pair.priceUsd) {
@@ -82,11 +129,11 @@ connection.onLogs('all', async (logInfo) => {
         usdValue = tokenAmountFormatted * usdPrice;
       }
     } catch (e) {
-      console.warn('Failed to fetch USD price from DexScreener.');
+      console.warn('❌ DexScreener price fetch failed.');
     }
 
     const msg = `💰 *New Buy Detected!*
-Token: [${TOKEN_MINT}](https://solscan.io/token/${TOKEN_MINT})
+Token: [${mint}](https://solscan.io/token/${mint})
 Buyer: [${buyer}](https://solscan.io/account/${buyer})
 Slot: ${slot}
 Amount: ${tokenAmountFormatted.toFixed(2)} tokens
@@ -96,6 +143,6 @@ Amount: ${tokenAmountFormatted.toFixed(2)} tokens
     bot.sendMessage(config.chatId, msg, { parse_mode: 'Markdown' });
 
   } catch (err) {
-    console.error('❌ Error in buybot:', err);
+    console.error('❌ Error parsing transaction:', err);
   }
 });
