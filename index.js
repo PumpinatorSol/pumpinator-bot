@@ -132,11 +132,13 @@ connection.onLogs('all', async (logInfo) => {
   const { signature, logs } = logInfo;
   const logText = logs.join('\n');
 
+  console.log(`📱 Received TX Signature: ${signature}`);
+
   const tokenMatch = trackedTokens.find(token => logText.includes(token.mint));
   if (!tokenMatch) return;
 
   const { mint, decimals } = tokenMatch;
-  console.log(`🎯 Match found for ${mint} — TX: ${signature}`);
+  console.log(`🎯 Log match for ${mint} — checking TX: ${signature}`);
 
   try {
     const txDetails = await connection.getParsedTransaction(signature, 'confirmed');
@@ -146,7 +148,7 @@ connection.onLogs('all', async (logInfo) => {
     const slot = txDetails.slot;
 
     let tokenAmount = 0;
-    const innerInstructions = txDetails.meta.innerInstructions || [];
+    const innerInstructions = txDetails.meta?.innerInstructions || [];
 
     innerInstructions.forEach(ix => {
       ix.instructions.forEach(inner => {
